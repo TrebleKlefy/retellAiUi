@@ -3,6 +3,7 @@ import { protect, authorize } from '../middleware/auth';
 import { validate, leadValidation } from '../middleware/validation';
 import { asyncHandler } from '../middleware/errorHandler';
 import { LeadController } from '../controllers/leadController';
+import { upload } from '../middleware/upload';
 
 const router = Router();
 const leadController = new LeadController();
@@ -11,20 +12,26 @@ const leadController = new LeadController();
 router.use(protect);
 
 // Lead CRUD operations
-router.get('/', asyncHandler(leadController.getLeads));
-router.get('/stats', asyncHandler(leadController.getLeadStats));
-router.get('/:id', asyncHandler(leadController.getLead));
-router.post('/', validate(leadValidation), asyncHandler(leadController.createLead));
-router.put('/:id', validate(leadValidation), asyncHandler(leadController.updateLead));
-router.delete('/:id', authorize('admin', 'manager'), asyncHandler(leadController.deleteLead));
+router.post('/clients/:clientId/leads', validate(leadValidation), asyncHandler(leadController.createLead));
+router.get('/clients/:clientId/leads', asyncHandler(leadController.getLeads));
+router.get('/leads/:id', asyncHandler(leadController.getLead));
+router.put('/leads/:id', validate(leadValidation), asyncHandler(leadController.updateLead));
+router.delete('/leads/:id', authorize('admin', 'manager'), asyncHandler(leadController.deleteLead));
 
-// Lead-specific operations
-router.get('/:id/calls', asyncHandler(leadController.getLeadCalls));
-router.post('/:id/convert', asyncHandler(leadController.convertToClient));
-router.put('/:id/status', asyncHandler(leadController.updateLeadStatus));
+// Lead statistics
+router.get('/clients/:clientId/leads/stats', asyncHandler(leadController.getLeadStats));
 
-// Bulk operations
-router.post('/bulk-import', authorize('admin', 'manager'), asyncHandler(leadController.bulkImport));
-router.post('/bulk-update', authorize('admin', 'manager'), asyncHandler(leadController.bulkUpdate));
+// Lead status management
+router.put('/leads/:id/status', asyncHandler(leadController.updateLeadStatus));
+
+// Import operations
+router.post('/clients/:clientId/import', upload.single('file'), asyncHandler(leadController.importLeads));
+router.post('/clients/:clientId/sync/airtable', asyncHandler(leadController.syncFromAirtable));
+router.post('/clients/:clientId/sync/google-sheets', asyncHandler(leadController.syncFromGoogleSheets));
+router.get('/import/:sessionId/progress', asyncHandler(leadController.getImportProgress));
+
+// Lead analysis
+router.post('/leads/calculate-score', asyncHandler(leadController.calculateLeadScore));
+router.post('/clients/:clientId/leads/detect-duplicates', asyncHandler(leadController.detectDuplicates));
 
 export default router; 
