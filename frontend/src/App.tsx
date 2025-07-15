@@ -9,6 +9,8 @@ import Dashboard from './pages/Dashboard';
 import Clients from './pages/Clients';
 import Leads from './pages/Leads';
 import Calls from './pages/Calls';
+import Queue from './pages/Queue';
+import QueueManagement from './pages/QueueManagement';
 import './styles/globals.css';
 
 function App() {
@@ -35,6 +37,8 @@ function App() {
                 <Route path="clients" element={<Clients />} />
                 <Route path="leads" element={<Leads />} />
                 <Route path="calls" element={<Calls />} />
+                <Route path="queue" element={<QueueManagement />} />
+                <Route path="clients/:clientId/queue" element={<Queue />} />
               </Route>
               
               {/* Catch all route */}

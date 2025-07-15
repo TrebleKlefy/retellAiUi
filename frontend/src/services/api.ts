@@ -133,4 +133,27 @@ export const healthCheck = async (): Promise<boolean> => {
   }
 };
 
+// Client service
+export const clientService = {
+  getClients: async () => {
+    return apiService.get('/clients');
+  },
+  
+  getClient: async (id: string) => {
+    return apiService.get(`/clients/${id}`);
+  },
+  
+  createClient: async (data: any) => {
+    return apiService.post('/clients', data);
+  },
+  
+  updateClient: async (id: string, data: any) => {
+    return apiService.put(`/clients/${id}`, data);
+  },
+  
+  deleteClient: async (id: string) => {
+    return apiService.delete(`/clients/${id}`);
+  }
+};
+
 export default api; 

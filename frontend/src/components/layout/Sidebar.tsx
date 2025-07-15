@@ -6,7 +6,8 @@ import {
   UserGroupIcon,
   PhoneIcon,
   ChartBarIcon,
-  Cog6ToothIcon
+  Cog6ToothIcon,
+  QueueListIcon
 } from '@heroicons/react/24/outline';
 import { useAuth } from '../../context/AuthContext';
 import { useApp } from '../../context/AppContext';
@@ -16,6 +17,7 @@ const navigation = [
   { name: 'Clients', href: '/clients', icon: UsersIcon },
   { name: 'Leads', href: '/leads', icon: UserGroupIcon },
   { name: 'Calls', href: '/calls', icon: PhoneIcon },
+  { name: 'Queue Management', href: '/queue', icon: QueueListIcon },
   { name: 'Analytics', href: '/analytics', icon: ChartBarIcon },
   { name: 'Settings', href: '/settings', icon: Cog6ToothIcon },
 ];

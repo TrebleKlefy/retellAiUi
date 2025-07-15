@@ -88,11 +88,11 @@ export class CallService {
     }
   }
 
-  async createCall(callData: CreateCallRequest, userId: string): Promise<Call> {
+  async createCall(callData: CreateCallRequest, userId?: string): Promise<Call> {
     try {
       const newCall = await AirtableService.createRecord(this.tableName, {
         ...callData,
-        agentId: userId,
+        agentId: userId || 'system',
         status: 'initiated',
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()

@@ -1,6 +1,7 @@
 import app from './app';
 import { config } from './config/environment';
 import { testDatabaseConnection } from './utils/database';
+import { CronService } from './services/cronService';
 
 const PORT = config.port;
 
@@ -32,6 +33,10 @@ const server = app.listen(PORT, async () => {
   } catch (error) {
     console.warn('⚠️  Database connection test failed, but server is running');
   }
+  
+  // Start queue processing cron job
+  const cronService = new CronService();
+  cronService.startQueueProcessing();
   
   console.log('✅ Server startup complete');
 });
