@@ -1,145 +1,227 @@
-import React from 'react';
-import { 
-  UsersIcon, 
-  UserGroupIcon, 
-  PhoneIcon, 
-  CurrencyDollarIcon 
-} from '@heroicons/react/24/outline';
+import React, { useState, useEffect } from 'react';
+import { useParams } from 'react-router-dom';
+import { AnalyticsData } from '../types/analytics';
+import { analyticsService } from '../services/analyticsService';
+import { MetricCard } from '../components/MetricCard';
+import { LineChart } from '../components/LineChart';
+import { BarChart } from '../components/BarChart';
+import { PieChart } from '../components/PieChart';
+import { TimeRangeSelector } from '../components/TimeRangeSelector';
+import { Loading } from '../components/common/Loading';
 
-const Dashboard: React.FC = () => {
-  const stats = [
-    {
-      name: 'Total Clients',
-      value: '1,234',
-      change: '+12%',
-      changeType: 'positive',
-      icon: UsersIcon,
-    },
-    {
-      name: 'Active Leads',
-      value: '567',
-      change: '+8%',
-      changeType: 'positive',
-      icon: UserGroupIcon,
-    },
-    {
-      name: 'Calls Made',
-      value: '89',
-      change: '+23%',
-      changeType: 'positive',
-      icon: PhoneIcon,
-    },
-    {
-      name: 'Revenue',
-      value: '$45,678',
-      change: '+15%',
-      changeType: 'positive',
-      icon: CurrencyDollarIcon,
-    },
-  ];
+export const Dashboard: React.FC = () => {
+  const { clientId } = useParams<{ clientId: string }>();
+  const [data, setData] = useState<AnalyticsData | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [timeRange, setTimeRange] = useState('7d');
+
+  useEffect(() => {
+    loadDashboardData();
+  }, [clientId, timeRange]);
+
+  const loadDashboardData = async () => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      const dashboardData = await analyticsService.getDashboardData(clientId, timeRange);
+      setData(dashboardData);
+    } catch (error) {
+      console.error('Failed to load dashboard data:', error);
+      setError('Failed to load dashboard data. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="container mx-auto px-4 py-8">
+        <Loading />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="container mx-auto px-4 py-8">
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+          <p className="text-red-800">{error}</p>
+          <button 
+            onClick={loadDashboardData}
+            className="mt-2 px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!data) {
+    return (
+      <div className="container mx-auto px-4 py-8">
+        <div className="text-center text-gray-500">
+          <p>No data available</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Calculate trend changes for metric cards
+  const getTrendChange = (current: number, previous: number): number => {
+    if (previous === 0) return current > 0 ? 100 : 0;
+    return ((current - previous) / previous) * 100;
+  };
+
+  const recentTrends = data.trends.slice(-2);
+  const currentTrend = recentTrends[1] || { calls: 0, leads: 0 };
+  const previousTrend = recentTrends[0] || { calls: 0, leads: 0 };
+
+  const callTrendChange = getTrendChange(currentTrend.calls, previousTrend.calls);
+  const leadTrendChange = getTrendChange(currentTrend.leads, previousTrend.leads);
 
   return (
-    <div className="space-y-6">
-      {/* Page header */}
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
-        <p className="text-gray-600">Welcome to your lead management dashboard</p>
-      </div>
-
-      {/* Stats grid */}
-      <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
-        {stats.map((stat) => {
-          const Icon = stat.icon;
-          return (
-            <div key={stat.name} className="card">
-              <div className="card-body">
-                <div className="flex items-center">
-                  <div className="flex-shrink-0">
-                    <Icon className="h-6 w-6 text-gray-400" />
-                  </div>
-                  <div className="ml-4 flex-1">
-                    <p className="text-sm font-medium text-gray-500 truncate">
-                      {stat.name}
-                    </p>
-                    <p className="text-2xl font-semibold text-gray-900">
-                      {stat.value}
-                    </p>
-                  </div>
-                </div>
-                <div className="mt-4">
-                  <span className={`text-sm font-medium ${
-                    stat.changeType === 'positive' ? 'text-success-600' : 'text-error-600'
-                  }`}>
-                    {stat.change}
-                  </span>
-                  <span className="text-sm text-gray-500 ml-1">from last month</span>
-                </div>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-
-      {/* Recent activity */}
-      <div className="card">
-        <div className="card-header">
-          <h3 className="text-lg font-medium text-gray-900">Recent Activity</h3>
+    <div className="container mx-auto px-4 py-8">
+      <div className="flex justify-between items-center mb-6">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900">
+            {clientId ? 'Client Dashboard' : 'Global Dashboard'}
+          </h1>
+          <p className="text-gray-600 mt-1">
+            {clientId ? 'Client-specific analytics and insights' : 'Overview of all client performance'}
+          </p>
         </div>
-        <div className="card-body">
-          <div className="space-y-4">
-            <div className="flex items-center space-x-3">
-              <div className="w-2 h-2 bg-success-400 rounded-full"></div>
-              <p className="text-sm text-gray-600">
-                New lead "John Doe" was added to the system
-              </p>
-              <span className="text-xs text-gray-400">2 hours ago</span>
-            </div>
-            <div className="flex items-center space-x-3">
-              <div className="w-2 h-2 bg-primary-400 rounded-full"></div>
-              <p className="text-sm text-gray-600">
-                Call completed with "Jane Smith" - 15 minutes duration
-              </p>
-              <span className="text-xs text-gray-400">4 hours ago</span>
-            </div>
-            <div className="flex items-center space-x-3">
-              <div className="w-2 h-2 bg-warning-400 rounded-full"></div>
-              <p className="text-sm text-gray-600">
-                Lead "Mike Johnson" status updated to "Qualified"
-              </p>
-              <span className="text-xs text-gray-400">6 hours ago</span>
-            </div>
+        <TimeRangeSelector value={timeRange} onChange={setTimeRange} />
+      </div>
+
+      {/* Metric Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        <MetricCard
+          title="Total Leads"
+          value={data.leads.total}
+          change={leadTrendChange}
+          icon="users"
+          color="blue"
+        />
+        <MetricCard
+          title="Total Calls"
+          value={data.calls.total}
+          change={callTrendChange}
+          icon="phone"
+          color="green"
+        />
+        <MetricCard
+          title="Success Rate"
+          value={`${data.calls.successRate.toFixed(1)}%`}
+          change={data.calls.successRate}
+          icon="trophy"
+          color="yellow"
+        />
+        <MetricCard
+          title="Conversion Rate"
+          value={`${data.leads.conversionRate.toFixed(1)}%`}
+          change={data.leads.conversionRate}
+          icon="target"
+          color="purple"
+        />
+      </div>
+
+      {/* Additional Metrics */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        <MetricCard
+          title="New Leads"
+          value={data.leads.new}
+          icon="trending-up"
+          color="green"
+        />
+        <MetricCard
+          title="Qualified Leads"
+          value={data.leads.qualified}
+          icon="chart-bar"
+          color="blue"
+        />
+        <MetricCard
+          title="Average Call Duration"
+          value={`${Math.round(data.calls.averageDuration)}s`}
+          icon="clock"
+          color="yellow"
+        />
+        <MetricCard
+          title="Queue Items"
+          value={data.queue.totalItems}
+          icon="trending-up"
+          color="red"
+        />
+      </div>
+
+      {/* Charts */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+        <div className="bg-white p-6 rounded-lg shadow">
+          <LineChart
+            data={data.trends}
+            xKey="date"
+            yKey="calls"
+            title="Call Trends"
+            color="#10B981"
+          />
+        </div>
+        <div className="bg-white p-6 rounded-lg shadow">
+          <LineChart
+            data={data.trends}
+            xKey="date"
+            yKey="leads"
+            title="Lead Trends"
+            color="#3B82F6"
+          />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+        <div className="bg-white p-6 rounded-lg shadow">
+          <PieChart
+            data={Object.entries(data.calls.outcomes).map(([key, value]) => ({
+              name: key.charAt(0).toUpperCase() + key.slice(1),
+              value
+            }))}
+            title="Call Outcomes Distribution"
+          />
+        </div>
+        <div className="bg-white p-6 rounded-lg shadow">
+          <BarChart
+            data={[
+              { name: 'Pending', value: data.queue.pendingItems },
+              { name: 'In Progress', value: data.queue.inProgressItems },
+              { name: 'Completed', value: data.queue.totalItems - data.queue.pendingItems - data.queue.inProgressItems }
+            ]}
+            title="Queue Status"
+            color="#F59E0B"
+          />
+        </div>
+      </div>
+
+      {/* Performance Summary */}
+      <div className="bg-white p-6 rounded-lg shadow">
+        <h3 className="text-lg font-semibold text-gray-900 mb-4">Performance Summary</h3>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="text-center">
+            <p className="text-2xl font-bold text-blue-600">{data.performance.dailyCalls}</p>
+            <p className="text-sm text-gray-600">Daily Calls</p>
           </div>
-        </div>
-      </div>
-
-      {/* Quick actions */}
-      <div className="card">
-        <div className="card-header">
-          <h3 className="text-lg font-medium text-gray-900">Quick Actions</h3>
-        </div>
-        <div className="card-body">
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <button className="p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
-              <UsersIcon className="h-8 w-8 text-primary-600 mx-auto mb-2" />
-              <p className="text-sm font-medium text-gray-900">Add Client</p>
-            </button>
-            <button className="p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
-              <UserGroupIcon className="h-8 w-8 text-primary-600 mx-auto mb-2" />
-              <p className="text-sm font-medium text-gray-900">Add Lead</p>
-            </button>
-            <button className="p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
-              <PhoneIcon className="h-8 w-8 text-primary-600 mx-auto mb-2" />
-              <p className="text-sm font-medium text-gray-900">Schedule Call</p>
-            </button>
-            <button className="p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
-              <CurrencyDollarIcon className="h-8 w-8 text-primary-600 mx-auto mb-2" />
-              <p className="text-sm font-medium text-gray-900">View Reports</p>
-            </button>
+          <div className="text-center">
+            <p className="text-2xl font-bold text-green-600">{data.performance.dailyLeads}</p>
+            <p className="text-sm text-gray-600">Daily Leads</p>
+          </div>
+          <div className="text-center">
+            <p className="text-2xl font-bold text-yellow-600">{data.performance.weeklyCalls}</p>
+            <p className="text-sm text-gray-600">Weekly Calls</p>
+          </div>
+          <div className="text-center">
+            <p className="text-2xl font-bold text-purple-600">{data.performance.efficiency.toFixed(1)}%</p>
+            <p className="text-sm text-gray-600">Efficiency</p>
           </div>
         </div>
       </div>
     </div>
   );
-};
-
-export default Dashboard; 
+}; 

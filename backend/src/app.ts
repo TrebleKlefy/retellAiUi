@@ -12,6 +12,7 @@ import authRoutes from './routes/auth';
 import clientRoutes from './routes/clients';
 import leadRoutes from './routes/leads';
 import callRoutes from './routes/calls';
+import analyticsRoutes from './routes/analytics';
 
 const app = express();
 
@@ -65,6 +66,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/clients', clientRoutes);
 app.use('/api/leads', leadRoutes);
 app.use('/api/calls', callRoutes);
+app.use('/api', analyticsRoutes);
 
 // Webhook routes
 app.use('/api/webhooks', (req, res) => {
