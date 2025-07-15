@@ -101,7 +101,7 @@ export interface UpdateLeadRequest {
 
 export interface ImportLeadRequest {
   clientId: string;
-  file?: Express.Multer.File;
+  file?: File;
   airtableSync?: boolean;
   googleSheetsSync?: boolean;
   mapping: LeadFieldMapping;
@@ -133,22 +133,8 @@ export interface LeadFilters {
   tags?: string[];
   scoreMin?: number;
   scoreMax?: number;
-}
-
-export interface LeadResponse {
-  success: boolean;
-  data: Lead;
-}
-
-export interface LeadsResponse {
-  success: boolean;
-  data: Lead[];
-  pagination?: {
-    page: number;
-    limit: number;
-    total: number;
-    totalPages: number;
-  };
+  page?: number;
+  limit?: number;
 }
 
 export interface LeadStats {
@@ -191,4 +177,11 @@ export interface SyncResult {
     record: any;
     message: string;
   }>;
-} 
+}
+
+export interface ImportProgress {
+  status: string;
+  progress: number;
+  total: number;
+  processed: number;
+}

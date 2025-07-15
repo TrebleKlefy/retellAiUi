@@ -140,6 +140,9 @@ export const clientValidation = [
 ];
 
 export const leadValidation = [
+  body('clientId')
+    .notEmpty()
+    .withMessage('Client ID is required'),
   body('firstName')
     .trim()
     .isLength({ min: 2, max: 50 })
@@ -149,26 +152,61 @@ export const leadValidation = [
     .isLength({ min: 2, max: 50 })
     .withMessage('Last name must be between 2 and 50 characters'),
   body('email')
+    .optional()
     .isEmail()
     .withMessage('Please provide a valid email address')
     .normalizeEmail(),
   body('phone')
-    .optional()
+    .notEmpty()
     .matches(/^[\+]?[1-9][\d]{0,15}$/)
     .withMessage('Please provide a valid phone number'),
-  body('company')
+  body('address')
+    .optional()
+    .trim()
+    .isLength({ max: 200 })
+    .withMessage('Address must be less than 200 characters'),
+  body('city')
     .optional()
     .trim()
     .isLength({ max: 100 })
-    .withMessage('Company name must be less than 100 characters'),
-  body('status')
-    .isIn(['new', 'contacted', 'qualified', 'proposal', 'closed', 'lost'])
-    .withMessage('Status must be new, contacted, qualified, proposal, closed, or lost'),
+    .withMessage('City must be less than 100 characters'),
+  body('state')
+    .optional()
+    .trim()
+    .isLength({ max: 50 })
+    .withMessage('State must be less than 50 characters'),
+  body('zipCode')
+    .optional()
+    .trim()
+    .isLength({ max: 20 })
+    .withMessage('Zip code must be less than 20 characters'),
+  body('country')
+    .optional()
+    .trim()
+    .isLength({ max: 100 })
+    .withMessage('Country must be less than 100 characters'),
   body('source')
     .optional()
     .trim()
     .isLength({ max: 50 })
-    .withMessage('Source must be less than 50 characters')
+    .withMessage('Source must be less than 50 characters'),
+  body('priority')
+    .optional()
+    .isIn(['urgent', 'high', 'normal', 'low'])
+    .withMessage('Priority must be urgent, high, normal, or low'),
+  body('notes')
+    .optional()
+    .trim()
+    .isLength({ max: 1000 })
+    .withMessage('Notes must be less than 1000 characters'),
+  body('tags')
+    .optional()
+    .isArray()
+    .withMessage('Tags must be an array'),
+  body('customFields')
+    .optional()
+    .isObject()
+    .withMessage('Custom fields must be an object')
 ];
 
 export const callValidation = [
