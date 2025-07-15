@@ -1,5 +1,4 @@
 import { Request, Response } from 'express';
-import { AuthRequest } from '../middleware/auth';
 import { CustomError } from '../middleware/errorHandler';
 import { ClientService } from '../services/clientService';
 import { createSuccessResponse, createErrorResponse } from '../utils/helpers';
@@ -11,17 +10,11 @@ export class ClientController {
     this.clientService = new ClientService();
   }
 
-  getClients = async (req: Request, res: Response): Promise<void> => {
+  getClients = async (_req: Request, res: Response): Promise<void> => {
     try {
-      const page = parseInt(req.query.page as string) || 1;
-      const limit = parseInt(req.query.limit as string) || 10;
-      const search = req.query.search as string;
-      const status = req.query.status as string;
-      const assignedTo = req.query.assignedTo as string;
-
-      const result = await this.clientService.getClients({ page, limit, search, status, assignedTo });
+      const clients = await this.clientService.getClients();
       
-      res.status(200).json(createSuccessResponse(result));
+      res.status(200).json(createSuccessResponse(clients));
     } catch (error) {
       if (error instanceof CustomError) {
         res.status(error.statusCode).json(createErrorResponse(error.message, error.statusCode));
@@ -35,7 +28,7 @@ export class ClientController {
     try {
       const { id } = req.params;
       
-      const client = await this.clientService.getClientById(id);
+      const client = await this.clientService.getClient(id);
       
       res.status(200).json(createSuccessResponse(client));
     } catch (error) {
@@ -50,9 +43,8 @@ export class ClientController {
   createClient = async (req: Request, res: Response): Promise<void> => {
     try {
       const clientData = req.body;
-      const userId = (req as AuthRequest).user?.id;
       
-      const result = await this.clientService.createClient(clientData, userId);
+      const result = await this.clientService.createClient(clientData);
       
       res.status(201).json(createSuccessResponse(result, 'Client created successfully'));
     } catch (error) {
@@ -97,48 +89,34 @@ export class ClientController {
     }
   };
 
-  getClientStats = async (req: Request, res: Response): Promise<void> => {
-    try {
-      const stats = await this.clientService.getClientStats();
-      
-      res.status(200).json(createSuccessResponse(stats));
-    } catch (error) {
-      res.status(500).json(createErrorResponse('Failed to get client stats'));
-    }
-  };
-
-  getClientLeads = async (req: Request, res: Response): Promise<void> => {
+  testIntegrations = async (req: Request, res: Response): Promise<void> => {
     try {
       const { id } = req.params;
-      const page = parseInt(req.query.page as string) || 1;
-      const limit = parseInt(req.query.limit as string) || 10;
       
-      const result = await this.clientService.getClientLeads(id, { page, limit });
+      const results = await this.clientService.testIntegrations(id);
       
-      res.status(200).json(createSuccessResponse(result));
+      res.status(200).json(createSuccessResponse(results));
     } catch (error) {
       if (error instanceof CustomError) {
         res.status(error.statusCode).json(createErrorResponse(error.message, error.statusCode));
       } else {
-        res.status(500).json(createErrorResponse('Failed to get client leads'));
+        res.status(500).json(createErrorResponse('Failed to test integrations'));
       }
     }
   };
 
-  getClientCalls = async (req: Request, res: Response): Promise<void> => {
+  getClientStats = async (req: Request, res: Response): Promise<void> => {
     try {
       const { id } = req.params;
-      const page = parseInt(req.query.page as string) || 1;
-      const limit = parseInt(req.query.limit as string) || 10;
       
-      const result = await this.clientService.getClientCalls(id, { page, limit });
+      const stats = await this.clientService.getClientStats(id);
       
-      res.status(200).json(createSuccessResponse(result));
+      res.status(200).json(createSuccessResponse(stats));
     } catch (error) {
       if (error instanceof CustomError) {
         res.status(error.statusCode).json(createErrorResponse(error.message, error.statusCode));
       } else {
-        res.status(500).json(createErrorResponse('Failed to get client calls'));
+        res.status(500).json(createErrorResponse('Failed to get client stats'));
       }
     }
   };

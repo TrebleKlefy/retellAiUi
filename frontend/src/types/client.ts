@@ -88,6 +88,20 @@ export interface UpdateClientRequest {
   preferences?: Partial<Client['preferences']>;
 }
 
+export interface ClientStats {
+  totalLeads: number;
+  activeLeads: number;
+  totalCalls: number;
+  successfulCalls: number;
+  successRate: number;
+}
+
+export interface IntegrationTestResult {
+  airtable: boolean;
+  googleSheets: boolean;
+  retell: boolean;
+}
+
 export interface ClientResponse {
   success: boolean;
   data: Client;
@@ -103,17 +117,3 @@ export interface ClientsResponse {
     totalPages: number;
   };
 }
-
-export interface ClientStats {
-  totalLeads: number;
-  activeLeads: number;
-  totalCalls: number;
-  successfulCalls: number;
-  successRate: number;
-}
-
-export interface IntegrationTestResult {
-  airtable: boolean;
-  googleSheets: boolean;
-  retell: boolean;
-} 

@@ -51,20 +51,146 @@ export const clientValidation = [
     .trim()
     .isLength({ min: 2, max: 100 })
     .withMessage('Client name must be between 2 and 100 characters'),
-  body('email')
+  body('isActive')
     .optional()
-    .isEmail()
-    .withMessage('Please provide a valid email address')
-    .normalizeEmail(),
-  body('phone')
+    .isBoolean()
+    .withMessage('isActive must be a boolean'),
+  
+  // Airtable Configuration
+  body('airtable.apiKey')
+    .optional()
+    .isString()
+    .withMessage('Airtable API key must be a string'),
+  body('airtable.baseId')
+    .optional()
+    .isString()
+    .withMessage('Airtable base ID must be a string'),
+  body('airtable.leadsTable')
+    .optional()
+    .isString()
+    .withMessage('Airtable leads table must be a string'),
+  body('airtable.resultsTable')
+    .optional()
+    .isString()
+    .withMessage('Airtable results table must be a string'),
+  body('airtable.enabled')
+    .optional()
+    .isBoolean()
+    .withMessage('Airtable enabled must be a boolean'),
+  
+  // Google Sheets Configuration
+  body('googleSheets.spreadsheetId')
+    .optional()
+    .isString()
+    .withMessage('Google Sheets spreadsheet ID must be a string'),
+  body('googleSheets.sheetName')
+    .optional()
+    .isString()
+    .withMessage('Google Sheets sheet name must be a string'),
+  body('googleSheets.enabled')
+    .optional()
+    .isBoolean()
+    .withMessage('Google Sheets enabled must be a boolean'),
+  body('googleSheets.syncInterval')
+    .optional()
+    .isInt({ min: 0 })
+    .withMessage('Google Sheets sync interval must be a positive integer'),
+  
+  // Retell AI Configuration
+  body('retell.apiKey')
+    .optional()
+    .isString()
+    .withMessage('Retell API key must be a string'),
+  body('retell.agentId')
+    .optional()
+    .isString()
+    .withMessage('Retell agent ID must be a string'),
+  body('retell.fromNumber')
     .optional()
     .matches(/^[\+]?[1-9][\d]{0,15}$/)
     .withMessage('Please provide a valid phone number'),
-  body('company')
+  
+  // Schedule Configuration
+  body('schedule.timezone')
     .optional()
-    .trim()
-    .isLength({ max: 100 })
-    .withMessage('Company name must be less than 100 characters')
+    .isString()
+    .withMessage('Timezone must be a string'),
+  body('schedule.activeDays')
+    .optional()
+    .isArray()
+    .withMessage('Active days must be an array'),
+  body('schedule.timeWindows')
+    .optional()
+    .isArray()
+    .withMessage('Time windows must be an array'),
+  body('schedule.maxConcurrent')
+    .optional()
+    .isInt({ min: 1, max: 50 })
+    .withMessage('Max concurrent calls must be between 1 and 50'),
+  body('schedule.delayBetweenCalls')
+    .optional()
+    .isInt({ min: 0 })
+    .withMessage('Delay between calls must be a positive integer'),
+  body('schedule.maxAttempts')
+    .optional()
+    .isInt({ min: 1, max: 10 })
+    .withMessage('Max attempts must be between 1 and 10'),
+  body('schedule.callCooldownHours')
+    .optional()
+    .isInt({ min: 0 })
+    .withMessage('Call cooldown hours must be a positive integer'),
+  
+  // Compliance Settings
+  body('compliance.enableStateFiltering')
+    .optional()
+    .isBoolean()
+    .withMessage('Enable state filtering must be a boolean'),
+  body('compliance.allowedStates')
+    .optional()
+    .isArray()
+    .withMessage('Allowed states must be an array'),
+  body('compliance.enableDuplicateDetection')
+    .optional()
+    .isBoolean()
+    .withMessage('Enable duplicate detection must be a boolean'),
+  body('compliance.quotaEnabled')
+    .optional()
+    .isBoolean()
+    .withMessage('Quota enabled must be a boolean'),
+  body('compliance.dailyQuota')
+    .optional()
+    .isInt({ min: 1 })
+    .withMessage('Daily quota must be a positive integer'),
+  
+  // Client Preferences
+  body('preferences.priority')
+    .optional()
+    .isInt({ min: 1, max: 10 })
+    .withMessage('Priority must be between 1 and 10'),
+  body('preferences.urgentCallsEnabled')
+    .optional()
+    .isBoolean()
+    .withMessage('Urgent calls enabled must be a boolean'),
+  body('preferences.batchDialingEnabled')
+    .optional()
+    .isBoolean()
+    .withMessage('Batch dialing enabled must be a boolean'),
+  body('preferences.pauseForUrgent')
+    .optional()
+    .isBoolean()
+    .withMessage('Pause for urgent must be a boolean'),
+  body('preferences.leadScoring')
+    .optional()
+    .isBoolean()
+    .withMessage('Lead scoring must be a boolean'),
+  body('preferences.duplicateDetection')
+    .optional()
+    .isBoolean()
+    .withMessage('Duplicate detection must be a boolean'),
+  body('preferences.autoFailAfterAttempts')
+    .optional()
+    .isBoolean()
+    .withMessage('Auto fail after attempts must be a boolean')
 ];
 
 export const leadValidation = [
