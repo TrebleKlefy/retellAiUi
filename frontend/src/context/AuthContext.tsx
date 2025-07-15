@@ -6,6 +6,7 @@ import { authService } from '../services/authService';
 const initialState: AuthState = {
   user: null,
   token: localStorage.getItem('token'),
+  refreshToken: localStorage.getItem('refreshToken'),
   isLoading: true,
   isAuthenticated: false,
 };
@@ -13,10 +14,11 @@ const initialState: AuthState = {
 // Action types
 type AuthAction =
   | { type: 'AUTH_START' }
-  | { type: 'AUTH_SUCCESS'; payload: { user: User; token: string } }
+  | { type: 'AUTH_SUCCESS'; payload: { user: User; token: string; refreshToken: string } }
   | { type: 'AUTH_FAILURE' }
   | { type: 'LOGOUT' }
-  | { type: 'UPDATE_USER'; payload: User };
+  | { type: 'UPDATE_USER'; payload: User }
+  | { type: 'REFRESH_TOKEN'; payload: { token: string; refreshToken: string } };
 
 // Reducer
 const authReducer = (state: AuthState, action: AuthAction): AuthState => {
@@ -31,6 +33,7 @@ const authReducer = (state: AuthState, action: AuthAction): AuthState => {
         ...state,
         user: action.payload.user,
         token: action.payload.token,
+        refreshToken: action.payload.refreshToken,
         isLoading: false,
         isAuthenticated: true,
       };
@@ -39,6 +42,7 @@ const authReducer = (state: AuthState, action: AuthAction): AuthState => {
         ...state,
         user: null,
         token: null,
+        refreshToken: null,
         isLoading: false,
         isAuthenticated: false,
       };
@@ -47,6 +51,7 @@ const authReducer = (state: AuthState, action: AuthAction): AuthState => {
         ...state,
         user: null,
         token: null,
+        refreshToken: null,
         isLoading: false,
         isAuthenticated: false,
       };
@@ -54,6 +59,12 @@ const authReducer = (state: AuthState, action: AuthAction): AuthState => {
       return {
         ...state,
         user: action.payload,
+      };
+    case 'REFRESH_TOKEN':
+      return {
+        ...state,
+        token: action.payload.token,
+        refreshToken: action.payload.refreshToken,
       };
     default:
       return state;
@@ -71,15 +82,35 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     const checkAuth = async () => {
       const token = localStorage.getItem('token');
-      if (token) {
+      const refreshToken = localStorage.getItem('refreshToken');
+      
+      if (token && refreshToken) {
         try {
           dispatch({ type: 'AUTH_START' });
           const user = await authService.getCurrentUser();
-          dispatch({ type: 'AUTH_SUCCESS', payload: { user, token } });
+          dispatch({ 
+            type: 'AUTH_SUCCESS', 
+            payload: { user, token, refreshToken } 
+          });
         } catch (error) {
           console.error('Auth check failed:', error);
-          localStorage.removeItem('token');
-          dispatch({ type: 'AUTH_FAILURE' });
+          // Try to refresh token
+          try {
+            const authResponse = await authService.refreshToken(refreshToken);
+            dispatch({ 
+              type: 'AUTH_SUCCESS', 
+              payload: { 
+                user: authResponse.user, 
+                token: authResponse.token, 
+                refreshToken: authResponse.refreshToken 
+              } 
+            });
+          } catch (refreshError) {
+            console.error('Token refresh failed:', refreshError);
+            localStorage.removeItem('token');
+            localStorage.removeItem('refreshToken');
+            dispatch({ type: 'AUTH_FAILURE' });
+          }
         }
       } else {
         dispatch({ type: 'AUTH_FAILURE' });
@@ -95,7 +126,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       dispatch({ type: 'AUTH_START' });
       const response = await authService.login(credentials);
       localStorage.setItem('token', response.token);
-      dispatch({ type: 'AUTH_SUCCESS', payload: { user: response.user, token: response.token } });
+      localStorage.setItem('refreshToken', response.refreshToken);
+      dispatch({ 
+        type: 'AUTH_SUCCESS', 
+        payload: { 
+          user: response.user, 
+          token: response.token, 
+          refreshToken: response.refreshToken 
+        } 
+      });
     } catch (error) {
       dispatch({ type: 'AUTH_FAILURE' });
       throw error;
@@ -108,9 +147,35 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       dispatch({ type: 'AUTH_START' });
       const response = await authService.register(data);
       localStorage.setItem('token', response.token);
-      dispatch({ type: 'AUTH_SUCCESS', payload: { user: response.user, token: response.token } });
+      localStorage.setItem('refreshToken', response.refreshToken);
+      dispatch({ 
+        type: 'AUTH_SUCCESS', 
+        payload: { 
+          user: response.user, 
+          token: response.token, 
+          refreshToken: response.refreshToken 
+        } 
+      });
     } catch (error) {
       dispatch({ type: 'AUTH_FAILURE' });
+      throw error;
+    }
+  };
+
+  // Refresh token function
+  const refreshToken = async (refreshToken: string) => {
+    try {
+      const response = await authService.refreshToken(refreshToken);
+      localStorage.setItem('token', response.token);
+      localStorage.setItem('refreshToken', response.refreshToken);
+      dispatch({ 
+        type: 'REFRESH_TOKEN', 
+        payload: { 
+          token: response.token, 
+          refreshToken: response.refreshToken 
+        } 
+      });
+    } catch (error) {
       throw error;
     }
   };
@@ -118,6 +183,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Logout function
   const logout = () => {
     localStorage.removeItem('token');
+    localStorage.removeItem('refreshToken');
     dispatch({ type: 'LOGOUT' });
   };
 
@@ -140,13 +206,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  // Forgot password function
+  const forgotPassword = async (email: string) => {
+    try {
+      await authService.forgotPassword(email);
+    } catch (error) {
+      throw error;
+    }
+  };
+
   const value: AuthContextType = {
     ...state,
     login,
     register,
     logout,
+    refreshToken,
     updateProfile,
     changePassword,
+    forgotPassword,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

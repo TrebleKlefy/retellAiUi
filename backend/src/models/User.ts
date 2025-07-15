@@ -1,26 +1,34 @@
 export interface User {
   id: string;
-  name: string;
   email: string;
-  password: string;
-  role: 'admin' | 'user' | 'manager';
+  firstName: string;
+  lastName: string;
+  role: UserRole;
   isActive: boolean;
-  lastLogin?: Date;
+  lastLoginAt?: Date;
   createdAt: Date;
   updatedAt: Date;
 }
 
+export enum UserRole {
+  ADMIN = 'admin',
+  MANAGER = 'manager',
+  USER = 'user'
+}
+
 export interface CreateUserRequest {
-  name: string;
   email: string;
   password: string;
-  role?: 'admin' | 'user' | 'manager';
+  firstName: string;
+  lastName: string;
+  role?: UserRole;
 }
 
 export interface UpdateUserRequest {
-  name?: string;
   email?: string;
-  role?: 'admin' | 'user' | 'manager';
+  firstName?: string;
+  lastName?: string;
+  role?: UserRole;
   isActive?: boolean;
 }
 
@@ -29,20 +37,33 @@ export interface LoginRequest {
   password: string;
 }
 
-export interface LoginResponse {
-  success: boolean;
+export interface AuthResponse {
+  user: User;
   token: string;
-  user: Omit<User, 'password'>;
+  refreshToken: string;
+}
+
+export interface RefreshTokenRequest {
+  refreshToken: string;
+}
+
+export interface ChangePasswordRequest {
+  currentPassword: string;
+  newPassword: string;
+}
+
+export interface ResetPasswordRequest {
+  email: string;
 }
 
 export interface UserResponse {
   success: boolean;
-  data: Omit<User, 'password'>;
+  data: User;
 }
 
 export interface UsersResponse {
   success: boolean;
-  data: Omit<User, 'password'>[];
+  data: User[];
   pagination?: {
     page: number;
     limit: number;

@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { body, validationResult, ValidationChain } from 'express-validator';
 import { CustomError } from './errorHandler';
+import { UserRole } from '../models/User';
 
 export const validate = (validations: ValidationChain[]) => {
   return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
@@ -18,32 +19,103 @@ export const validate = (validations: ValidationChain[]) => {
   };
 };
 
+// Password strength validation
+const validatePasswordStrength = (password: string) => {
+  const minLength = 8;
+  const hasUpperCase = /[A-Z]/.test(password);
+  const hasLowerCase = /[a-z]/.test(password);
+  const hasNumbers = /\d/.test(password);
+  const hasSpecialChar = /[!@#$%^&*(),.?":{}|<>]/.test(password);
+
+  if (password.length < minLength) {
+    throw new Error('Password must be at least 8 characters long');
+  }
+  if (!hasUpperCase) {
+    throw new Error('Password must contain at least one uppercase letter');
+  }
+  if (!hasLowerCase) {
+    throw new Error('Password must contain at least one lowercase letter');
+  }
+  if (!hasNumbers) {
+    throw new Error('Password must contain at least one number');
+  }
+  if (!hasSpecialChar) {
+    throw new Error('Password must contain at least one special character');
+  }
+  return true;
+};
+
 // Common validation rules
 export const loginValidation = [
-  body('email')
-    .isEmail()
-    .withMessage('Please provide a valid email address'),
-  body('password')
-    .isLength({ min: 6 })
-    .withMessage('Password must be at least 6 characters long')
-];
-
-export const registerValidation = [
-  body('name')
-    .trim()
-    .isLength({ min: 2, max: 50 })
-    .withMessage('Name must be between 2 and 50 characters'),
   body('email')
     .isEmail()
     .withMessage('Please provide a valid email address')
     .normalizeEmail(),
   body('password')
-    .isLength({ min: 6 })
-    .withMessage('Password must be at least 6 characters long'),
+    .notEmpty()
+    .withMessage('Password is required')
+];
+
+export const registerValidation = [
+  body('firstName')
+    .trim()
+    .isLength({ min: 2, max: 50 })
+    .withMessage('First name must be between 2 and 50 characters')
+    .matches(/^[a-zA-Z\s]+$/)
+    .withMessage('First name can only contain letters and spaces'),
+  body('lastName')
+    .trim()
+    .isLength({ min: 2, max: 50 })
+    .withMessage('Last name must be between 2 and 50 characters')
+    .matches(/^[a-zA-Z\s]+$/)
+    .withMessage('Last name can only contain letters and spaces'),
+  body('email')
+    .isEmail()
+    .withMessage('Please provide a valid email address')
+    .normalizeEmail(),
+  body('password')
+    .custom(validatePasswordStrength),
   body('role')
     .optional()
-    .isIn(['admin', 'user', 'manager'])
-    .withMessage('Role must be admin, user, or manager')
+    .isIn(Object.values(UserRole))
+    .withMessage('Role must be admin, manager, or user')
+];
+
+export const changePasswordValidation = [
+  body('currentPassword')
+    .notEmpty()
+    .withMessage('Current password is required'),
+  body('newPassword')
+    .custom(validatePasswordStrength)
+];
+
+export const forgotPasswordValidation = [
+  body('email')
+    .isEmail()
+    .withMessage('Please provide a valid email address')
+    .normalizeEmail()
+];
+
+export const updateProfileValidation = [
+  body('firstName')
+    .optional()
+    .trim()
+    .isLength({ min: 2, max: 50 })
+    .withMessage('First name must be between 2 and 50 characters')
+    .matches(/^[a-zA-Z\s]+$/)
+    .withMessage('First name can only contain letters and spaces'),
+  body('lastName')
+    .optional()
+    .trim()
+    .isLength({ min: 2, max: 50 })
+    .withMessage('Last name must be between 2 and 50 characters')
+    .matches(/^[a-zA-Z\s]+$/)
+    .withMessage('Last name can only contain letters and spaces'),
+  body('email')
+    .optional()
+    .isEmail()
+    .withMessage('Please provide a valid email address')
+    .normalizeEmail()
 ];
 
 export const clientValidation = [

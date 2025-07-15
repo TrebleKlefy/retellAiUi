@@ -2,12 +2,19 @@ import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import { config } from '../config/environment';
 import { CustomError } from './errorHandler';
+import { UserRole } from '../models/User';
 
 export interface AuthRequest extends Request {
-  user?: any;
+  user?: {
+    id: string;
+    email: string;
+    role: UserRole;
+    iat: number;
+    exp: number;
+  };
 }
 
-export const protect = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
+export const authenticateToken = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
   let token: string | undefined;
 
   if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
@@ -15,7 +22,7 @@ export const protect = async (req: AuthRequest, res: Response, next: NextFunctio
   }
 
   if (!token) {
-    next(new CustomError('Not authorized to access this route', 401));
+    next(new CustomError('Access token required', 401));
     return;
   }
 
@@ -28,14 +35,20 @@ export const protect = async (req: AuthRequest, res: Response, next: NextFunctio
     
     next();
   } catch (error) {
-    next(new CustomError('Not authorized to access this route', 401));
+    if (error instanceof jwt.TokenExpiredError) {
+      next(new CustomError('Token expired', 401));
+    } else if (error instanceof jwt.JsonWebTokenError) {
+      next(new CustomError('Invalid token', 401));
+    } else {
+      next(new CustomError('Not authorized to access this route', 401));
+    }
   }
 };
 
-export const authorize = (...roles: string[]) => {
+export const requireRole = (roles: UserRole[]) => {
   return (req: AuthRequest, res: Response, next: NextFunction): void => {
     if (!req.user) {
-      next(new CustomError('Not authorized to access this route', 401));
+      next(new CustomError('Authentication required', 401));
       return;
     }
 
@@ -48,11 +61,19 @@ export const authorize = (...roles: string[]) => {
   };
 };
 
-export const generateToken = (userId: string, role: string): string => {
+export const generateToken = (userId: string, email: string, role: UserRole): string => {
   return jwt.sign(
-    { id: userId, role },
+    { id: userId, email, role },
     config.jwt.secret,
     { expiresIn: config.jwt.expiresIn }
+  );
+};
+
+export const generateRefreshToken = (userId: string, email: string, role: UserRole): string => {
+  return jwt.sign(
+    { id: userId, email, role, type: 'refresh' },
+    config.jwt.refreshSecret,
+    { expiresIn: config.jwt.refreshExpiresIn }
   );
 };
 
@@ -62,4 +83,20 @@ export const verifyToken = (token: string): any => {
   } catch (error) {
     throw new CustomError('Invalid token', 401);
   }
-}; 
+};
+
+export const verifyRefreshToken = (token: string): any => {
+  try {
+    const decoded = jwt.verify(token, config.jwt.refreshSecret) as any;
+    if (decoded.type !== 'refresh') {
+      throw new CustomError('Invalid refresh token', 401);
+    }
+    return decoded;
+  } catch (error) {
+    throw new CustomError('Invalid refresh token', 401);
+  }
+};
+
+// Legacy function names for backward compatibility
+export const protect = authenticateToken;
+export const authorize = requireRole; 

@@ -6,10 +6,12 @@ import {
   UserGroupIcon,
   PhoneIcon,
   ChartBarIcon,
-  Cog6ToothIcon
+  Cog6ToothIcon,
+  UserCircleIcon
 } from '@heroicons/react/24/outline';
 import { useAuth } from '../../context/AuthContext';
 import { useApp } from '../../context/AppContext';
+import { UserRole } from '../../types/auth';
 
 const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: HomeIcon },
@@ -20,9 +22,16 @@ const navigation = [
   { name: 'Settings', href: '/settings', icon: Cog6ToothIcon },
 ];
 
+const adminNavigation = [
+  { name: 'Users', href: '/users', icon: UserCircleIcon },
+];
+
 const Sidebar: React.FC = () => {
   const { user } = useAuth();
   const { sidebarOpen } = useApp();
+
+  const isAdmin = user?.role === UserRole.ADMIN;
+  const allNavigation = [...navigation, ...(isAdmin ? adminNavigation : [])];
 
   return (
     <div className={`fixed inset-y-0 left-0 z-50 w-64 bg-white shadow-lg transform transition-transform duration-300 ease-in-out ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
@@ -39,7 +48,7 @@ const Sidebar: React.FC = () => {
 
         {/* Navigation */}
         <nav className="flex-1 px-4 py-6 space-y-2">
-          {navigation.map((item) => {
+          {allNavigation.map((item) => {
             const Icon = item.icon;
             return (
               <NavLink
@@ -65,14 +74,14 @@ const Sidebar: React.FC = () => {
           <div className="flex items-center space-x-3">
             <div className="w-8 h-8 bg-primary-600 rounded-full flex items-center justify-center">
               <span className="text-white font-medium text-sm">
-                {user?.name?.charAt(0).toUpperCase()}
+                {user?.firstName?.charAt(0).toUpperCase()}
               </span>
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium text-gray-900 truncate">
-                {user?.name}
+                {user?.firstName} {user?.lastName}
               </p>
-              <p className="text-xs text-gray-500 truncate">
+              <p className="text-xs text-gray-500 truncate capitalize">
                 {user?.role}
               </p>
             </div>

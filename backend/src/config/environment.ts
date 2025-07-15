@@ -10,7 +10,9 @@ export const config = {
   // JWT Configuration
   jwt: {
     secret: process.env.JWT_SECRET || 'your-secret-key',
-    expiresIn: process.env.JWT_EXPIRES_IN || '24h'
+    refreshSecret: process.env.JWT_REFRESH_SECRET || 'your-refresh-secret-key',
+    expiresIn: process.env.JWT_EXPIRES_IN || '15m',
+    refreshExpiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '7d'
   },
   
   // Airtable Configuration
@@ -41,7 +43,9 @@ export const config = {
   // Rate Limiting
   rateLimit: {
     windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS || '900000'), // 15 minutes
-    maxRequests: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || '100')
+    maxRequests: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || '100'),
+    authWindowMs: parseInt(process.env.AUTH_RATE_LIMIT_WINDOW_MS || '900000'), // 15 minutes
+    authMaxRequests: parseInt(process.env.AUTH_RATE_LIMIT_MAX_REQUESTS || '5')
   },
   
   // Logging
@@ -59,6 +63,7 @@ export const config = {
 // Validate required environment variables
 const requiredEnvVars = [
   'JWT_SECRET',
+  'JWT_REFRESH_SECRET',
   'AIRTABLE_API_KEY',
   'AIRTABLE_BASE_ID'
 ];

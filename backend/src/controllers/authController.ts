@@ -6,7 +6,10 @@ import {
   LoginRequest, 
   CreateUserRequest, 
   UpdateUserRequest,
-  LoginResponse,
+  RefreshTokenRequest,
+  ChangePasswordRequest,
+  ResetPasswordRequest,
+  AuthResponse,
   UserResponse,
   UsersResponse 
 } from '../models/User';
@@ -19,11 +22,27 @@ export class AuthController {
     this.authService = new AuthService();
   }
 
+  register = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const userData: CreateUserRequest = req.body;
+      
+      const result: AuthResponse = await this.authService.register(userData);
+      
+      res.status(201).json(createSuccessResponse(result, 'User registered successfully'));
+    } catch (error) {
+      if (error instanceof CustomError) {
+        res.status(error.statusCode).json(createErrorResponse(error.message, error.statusCode));
+      } else {
+        res.status(500).json(createErrorResponse('Registration failed'));
+      }
+    }
+  };
+
   login = async (req: Request, res: Response): Promise<void> => {
     try {
       const { email, password }: LoginRequest = req.body;
       
-      const result = await this.authService.login(email, password);
+      const result: AuthResponse = await this.authService.login({ email, password });
       
       res.status(200).json(createSuccessResponse(result, 'Login successful'));
     } catch (error) {
@@ -35,18 +54,23 @@ export class AuthController {
     }
   };
 
-  register = async (req: Request, res: Response): Promise<void> => {
+  refreshToken = async (req: Request, res: Response): Promise<void> => {
     try {
-      const userData: CreateUserRequest = req.body;
+      const { refreshToken }: RefreshTokenRequest = req.body;
       
-      const result = await this.authService.register(userData);
+      if (!refreshToken) {
+        res.status(400).json(createErrorResponse('Refresh token is required', 400));
+        return;
+      }
       
-      res.status(201).json(createSuccessResponse(result, 'User registered successfully'));
+      const result: AuthResponse = await this.authService.refreshToken(refreshToken);
+      
+      res.status(200).json(createSuccessResponse(result, 'Token refreshed successfully'));
     } catch (error) {
       if (error instanceof CustomError) {
         res.status(error.statusCode).json(createErrorResponse(error.message, error.statusCode));
       } else {
-        res.status(500).json(createErrorResponse('Registration failed'));
+        res.status(500).json(createErrorResponse('Token refresh failed'));
       }
     }
   };
@@ -74,8 +98,6 @@ export class AuthController {
 
   logout = async (req: AuthRequest, res: Response): Promise<void> => {
     try {
-      // In a JWT-based system, logout is typically handled client-side
-      // by removing the token. However, we can log the logout event.
       const userId = req.user?.id;
       
       if (userId) {
@@ -113,7 +135,7 @@ export class AuthController {
   changePassword = async (req: AuthRequest, res: Response): Promise<void> => {
     try {
       const userId = req.user?.id;
-      const { currentPassword, newPassword } = req.body;
+      const { currentPassword, newPassword }: ChangePasswordRequest = req.body;
       
       if (!userId) {
         res.status(401).json(createErrorResponse('User not authenticated', 401));
@@ -129,6 +151,25 @@ export class AuthController {
       } else {
         res.status(500).json(createErrorResponse('Failed to change password'));
       }
+    }
+  };
+
+  forgotPassword = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const { email }: ResetPasswordRequest = req.body;
+      
+      if (!email) {
+        res.status(400).json(createErrorResponse('Email is required', 400));
+        return;
+      }
+      
+      await this.authService.resetPassword(email);
+      
+      // Always return success for security reasons
+      res.status(200).json(createSuccessResponse(null, 'If an account with that email exists, a password reset link has been sent'));
+    } catch (error) {
+      // Always return success for security reasons
+      res.status(200).json(createSuccessResponse(null, 'If an account with that email exists, a password reset link has been sent'));
     }
   };
 
