@@ -86,23 +86,27 @@ export interface BatchCallRequest {
   maxConcurrent?: number;
 }
 
-export interface UpdateCallRequest {
+export interface CallFilters {
+  clientId?: string;
+  leadId?: string;
   status?: CallStatus;
   outcome?: CallOutcome;
-  duration?: number;
-  transcript?: string;
-  recordingUrl?: string;
-  sentiment?: number;
-  intent?: string;
-  keywords?: string[];
-  notes?: string;
-  appointmentDate?: Date;
-  followUpDate?: Date;
-  followUpNotes?: string;
   priority?: CallPriority;
-  attemptNumber?: number;
-  startedAt?: Date;
-  endedAt?: Date;
+  dateFrom?: Date;
+  dateTo?: Date;
+  search?: string;
+}
+
+export interface CallStats {
+  totalCalls: number;
+  successfulCalls: number;
+  failedCalls: number;
+  successRate: number;
+  averageDuration: number;
+  totalDuration: number;
+  callsByStatus: Record<CallStatus, number>;
+  callsByOutcome: Record<CallOutcome, number>;
+  callsByPriority: Record<CallPriority, number>;
 }
 
 export interface CallResponse {
@@ -121,48 +125,16 @@ export interface CallsResponse {
   };
 }
 
-export interface CallStats {
-  totalCalls: number;
-  successfulCalls: number;
-  failedCalls: number;
-  successRate: number;
-  averageDuration: number;
-  totalDuration: number;
-  callsByStatus: Record<CallStatus, number>;
-  callsByOutcome: Record<CallOutcome, number>;
-  callsByPriority: Record<CallPriority, number>;
-}
-
-export interface CallFilters {
-  clientId?: string;
-  leadId?: string;
-  status?: CallStatus;
-  outcome?: CallOutcome;
-  priority?: CallPriority;
-  dateFrom?: Date;
-  dateTo?: Date;
-  search?: string;
-}
-
-export interface RetellCallData {
-  call_id: string;
-  agent_id: string;
-  phone_number: string;
-  status: string;
-  duration?: number;
-  recording_url?: string;
-  transcript?: string;
-  metadata?: any;
-  analysis_data?: {
-    sentiment?: number;
-    intent?: string;
-    keywords?: string[];
-    summary?: string;
+export interface BatchCallResponse {
+  success: boolean;
+  data: {
+    batchCallId: string;
+    totalCalls: number;
+    calls: Call[];
   };
 }
 
-export interface RetellWebhookPayload {
-  event_type: string;
-  call: RetellCallData;
-  timestamp: string;
-} 
+export interface CallStatsResponse {
+  success: boolean;
+  data: CallStats;
+}

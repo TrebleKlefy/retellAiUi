@@ -100,22 +100,32 @@ export const leadValidation = [
 ];
 
 export const callValidation = [
+  body('clientId')
+    .notEmpty()
+    .withMessage('Client ID is required'),
   body('leadId')
     .notEmpty()
     .withMessage('Lead ID is required'),
-  body('duration')
+  body('priority')
     .optional()
-    .isInt({ min: 0 })
-    .withMessage('Duration must be a positive integer'),
-  body('notes')
+    .isIn(['urgent', 'high', 'normal', 'low'])
+    .withMessage('Priority must be urgent, high, normal, or low'),
+  body('scheduledAt')
     .optional()
-    .trim()
-    .isLength({ max: 1000 })
-    .withMessage('Notes must be less than 1000 characters'),
-  body('outcome')
+    .isISO8601()
+    .withMessage('Scheduled date must be a valid ISO 8601 date'),
+  body('dynamicVariables')
     .optional()
-    .isIn(['successful', 'no-answer', 'voicemail', 'busy', 'wrong-number'])
-    .withMessage('Outcome must be successful, no-answer, voicemail, busy, or wrong-number')
+    .isObject()
+    .withMessage('Dynamic variables must be an object'),
+  body('leadIds')
+    .optional()
+    .isArray()
+    .withMessage('Lead IDs must be an array'),
+  body('maxConcurrent')
+    .optional()
+    .isInt({ min: 1, max: 50 })
+    .withMessage('Max concurrent must be between 1 and 50')
 ];
 
 // File upload validation

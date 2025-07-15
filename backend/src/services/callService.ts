@@ -1,22 +1,174 @@
 import { CustomError } from '../middleware/errorHandler';
 import { AirtableService } from '../utils/database';
-import { Call, CreateCallRequest, UpdateCallRequest, CallStats, CallFilters, RetellWebhookPayload } from '../models/Call';
+import { 
+  Call, 
+  CreateCallRequest, 
+  UpdateCallRequest, 
+  CallStats, 
+  CallFilters, 
+  RetellWebhookPayload,
+  BatchCallRequest,
+  CallStatus,
+  CallOutcome,
+  CallPriority
+} from '../models/Call';
+import { Client } from '../models/Client';
+import { Lead } from '../models/Lead';
+import { RetellService } from './retellService';
+import { ClientService } from './clientService';
+import { LeadService } from './leadService';
 import { config } from '../config/environment';
-import axios from 'axios';
 
 export class CallService {
   private readonly tableName = 'Calls';
+  private retellService: RetellService;
+  private clientService: ClientService;
+  private leadService: LeadService;
 
-  async getCalls(options: CallFilters & { page: number; limit: number }) {
+  constructor() {
+    this.retellService = new RetellService();
+    this.clientService = new ClientService();
+    this.leadService = new LeadService();
+  }
+
+  async createCall(callData: CreateCallRequest): Promise<Call> {
     try {
-      const { page, limit, search, status, outcome, leadId, agentId, dateFrom, dateTo } = options;
-      const offset = (page - 1) * limit;
+      // Get client and lead data
+      const client = await this.clientService.getClient(callData.clientId);
+      const lead = await this.leadService.getLead(callData.leadId);
+      
+      if (!client.retell?.isActive) {
+        throw new CustomError('Client Retell AI is not active', 400);
+      }
+      
+      // Check concurrency limits
+      const concurrency = await this.retellService.getConcurrency(client);
+      if (concurrency.currentConcurrency >= concurrency.concurrencyLimit) {
+        throw new CustomError('Concurrency limit reached', 429);
+      }
+      
+      // Create call with Retell AI
+      const retellCall = await this.retellService.createCall(
+        client, 
+        lead, 
+        callData.priority || 'normal'
+      );
+      
+      // Create call record
+      const call = await this.createCallRecord({
+        callId: retellCall.callId,
+        clientId: callData.clientId,
+        leadId: callData.leadId,
+        fromNumber: client.retell!.fromNumber,
+        toNumber: lead.phone!,
+        status: CallStatus.INITIATED,
+        outcome: CallOutcome.FAILED, // Will be updated by webhook
+        priority: callData.priority || CallPriority.NORMAL,
+        scheduledAt: callData.scheduledAt || new Date(),
+        attemptNumber: 1,
+        maxAttempts: 3,
+        duration: 0,
+        transcript: '',
+        sentiment: 0,
+        intent: '',
+        keywords: [],
+        notes: '',
+        followUpNotes: ''
+      });
+      
+      return call;
+    } catch (error) {
+      if (error instanceof CustomError) {
+        throw error;
+      }
+      throw new CustomError(`Failed to create call: ${error instanceof Error ? error.message : 'Unknown error'}`, 500);
+    }
+  }
+
+  async createBatchCall(batchData: BatchCallRequest): Promise<{
+    batchCallId: string;
+    totalCalls: number;
+    calls: Call[];
+  }> {
+    try {
+      // Get client and leads data
+      const client = await this.clientService.getClient(batchData.clientId);
+      const leads = await Promise.all(
+        batchData.leadIds.map(id => this.leadService.getLead(id))
+      );
+      
+      if (!client.retell?.isActive) {
+        throw new CustomError('Client Retell AI is not active', 400);
+      }
+      
+      // Check concurrency limits
+      const concurrency = await this.retellService.getConcurrency(client);
+      const maxConcurrent = Math.min(
+        batchData.maxConcurrent || 10,
+        concurrency.concurrencyLimit - concurrency.currentConcurrency
+      );
+      
+      if (maxConcurrent <= 0) {
+        throw new CustomError('No available concurrency slots', 429);
+      }
+      
+      // Create batch call with Retell AI
+      const retellBatch = await this.retellService.createBatchCall(
+        client,
+        leads.slice(0, maxConcurrent),
+        batchData.priority || 'normal'
+      );
+      
+      // Create call records
+      const calls = await Promise.all(
+        leads.slice(0, maxConcurrent).map(lead =>
+          this.createCallRecord({
+            callId: `${retellBatch.batchCallId}_${lead.id}`,
+            clientId: batchData.clientId,
+            leadId: lead.id,
+            fromNumber: client.retell!.fromNumber,
+            toNumber: lead.phone!,
+            status: CallStatus.SCHEDULED,
+            outcome: CallOutcome.FAILED, // Will be updated by webhook
+            priority: batchData.priority || CallPriority.NORMAL,
+            scheduledAt: batchData.scheduledAt || new Date(),
+            attemptNumber: 1,
+            maxAttempts: 3,
+            duration: 0,
+            transcript: '',
+            sentiment: 0,
+            intent: '',
+            keywords: [],
+            notes: '',
+            followUpNotes: ''
+          })
+        )
+      );
+      
+      return {
+        batchCallId: retellBatch.batchCallId,
+        totalCalls: calls.length,
+        calls
+      };
+    } catch (error) {
+      if (error instanceof CustomError) {
+        throw error;
+      }
+      throw new CustomError(`Failed to create batch call: ${error instanceof Error ? error.message : 'Unknown error'}`, 500);
+    }
+  }
+
+  async getCalls(clientId: string, filters?: CallFilters): Promise<Call[]> {
+    try {
+      const { search, status, outcome, priority, dateFrom, dateTo } = filters || {};
+      const offset = 0;
+      const limit = 100; // Default limit
 
       let filterFormula = '';
-      const conditions = [];
+      const conditions = [`{ClientId} = '${clientId}'`];
 
       if (search) {
-        conditions.push(`OR(SEARCH('${search}', {PhoneNumber}) > 0, SEARCH('${search}', {Notes}) > 0)`);
+        conditions.push(`OR(SEARCH('${search}', {ToNumber}) > 0, SEARCH('${search}', {Notes}) > 0)`);
       }
 
       if (status) {
@@ -27,12 +179,8 @@ export class CallService {
         conditions.push(`{Outcome} = '${outcome}'`);
       }
 
-      if (leadId) {
-        conditions.push(`{LeadId} = '${leadId}'`);
-      }
-
-      if (agentId) {
-        conditions.push(`{AgentId} = '${agentId}'`);
+      if (priority) {
+        conditions.push(`{Priority} = '${priority}'`);
       }
 
       if (dateFrom || dateTo) {
@@ -57,21 +205,13 @@ export class CallService {
         offset: offset
       });
 
-      return {
-        data: records,
-        pagination: {
-          page,
-          limit,
-          total: records.length,
-          totalPages: Math.ceil(records.length / limit)
-        }
-      };
+      return records;
     } catch (error) {
       throw new CustomError('Failed to get calls', 500);
     }
   }
 
-  async getCallById(callId: string): Promise<Call> {
+  async getCall(callId: string): Promise<Call> {
     try {
       const call = await AirtableService.getRecord(this.tableName, callId);
       
@@ -88,337 +228,224 @@ export class CallService {
     }
   }
 
-  async createCall(callData: CreateCallRequest, userId: string): Promise<Call> {
+  async cancelCall(callId: string): Promise<void> {
     try {
-      const newCall = await AirtableService.createRecord(this.tableName, {
-        ...callData,
-        agentId: userId,
-        status: 'initiated',
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-      });
-
-      return newCall;
-    } catch (error) {
-      throw new CustomError('Failed to create call', 500);
-    }
-  }
-
-  async updateCall(callId: string, updateData: UpdateCallRequest): Promise<Call> {
-    try {
-      const existingCall = await AirtableService.getRecord(this.tableName, callId);
+      // Get call and client data
+      const call = await this.getCall(callId);
+      const client = await this.clientService.getClient(call.clientId);
       
-      if (!existingCall) {
-        throw new CustomError('Call not found', 404);
-      }
-
-      const updatedCall = await AirtableService.updateRecord(this.tableName, callId, {
-        ...updateData,
-        updatedAt: new Date().toISOString()
-      });
-
-      return updatedCall;
+      // Cancel call with Retell AI
+      await this.retellService.cancelCall(call.callId, client);
+      
+      // Update call status
+      await this.updateCall(callId, { status: CallStatus.CANCELLED });
     } catch (error) {
       if (error instanceof CustomError) {
         throw error;
       }
-      throw new CustomError('Failed to update call', 500);
+      throw new CustomError('Failed to cancel call', 500);
     }
   }
 
-  async deleteCall(callId: string): Promise<void> {
+  async getCallStats(clientId: string): Promise<CallStats> {
     try {
-      const existingCall = await AirtableService.getRecord(this.tableName, callId);
+      const calls = await this.getCalls(clientId);
       
-      if (!existingCall) {
-        throw new CustomError('Call not found', 404);
-      }
+      const totalCalls = calls.length;
+      const successfulCalls = calls.filter(call => 
+        call.outcome === CallOutcome.SUCCESSFUL || 
+        call.outcome === CallOutcome.APPOINTMENT_SCHEDULED || 
+        call.outcome === CallOutcome.QUALIFIED_LEAD
+      ).length;
+      const failedCalls = calls.filter(call => call.outcome === CallOutcome.FAILED).length;
+      const successRate = totalCalls > 0 ? (successfulCalls / totalCalls) * 100 : 0;
+      const totalDuration = calls.reduce((sum, call) => sum + (call.duration || 0), 0);
+      const averageDuration = totalCalls > 0 ? Math.round(totalDuration / totalCalls) : 0;
 
-      await AirtableService.deleteRecord(this.tableName, callId);
-    } catch (error) {
-      if (error instanceof CustomError) {
-        throw error;
-      }
-      throw new CustomError('Failed to delete call', 500);
-    }
-  }
+      // Group by status
+      const callsByStatus = Object.values(CallStatus).reduce((acc, status) => {
+        acc[status] = calls.filter(call => call.status === status).length;
+        return acc;
+      }, {} as Record<CallStatus, number>);
 
-  async getCallStats(): Promise<CallStats> {
-    try {
-      const allCalls = await AirtableService.getRecords(this.tableName);
-      
-      const totalDuration = allCalls.reduce((sum, call) => sum + (call.duration || 0), 0);
-      const successfulCalls = allCalls.filter(call => call.outcome === 'successful').length;
-      const successRate = allCalls.length > 0 ? (successfulCalls / allCalls.length) * 100 : 0;
+      // Group by outcome
+      const callsByOutcome = Object.values(CallOutcome).reduce((acc, outcome) => {
+        acc[outcome] = calls.filter(call => call.outcome === outcome).length;
+        return acc;
+      }, {} as Record<CallOutcome, number>);
 
-      const stats: CallStats = {
-        total: allCalls.length,
-        successful: successfulCalls,
-        noAnswer: allCalls.filter(call => call.outcome === 'no-answer').length,
-        voicemail: allCalls.filter(call => call.outcome === 'voicemail').length,
-        busy: allCalls.filter(call => call.outcome === 'busy').length,
-        wrongNumber: allCalls.filter(call => call.outcome === 'wrong-number').length,
-        failed: allCalls.filter(call => call.outcome === 'failed').length,
+      // Group by priority
+      const callsByPriority = Object.values(CallPriority).reduce((acc, priority) => {
+        acc[priority] = calls.filter(call => call.priority === priority).length;
+        return acc;
+      }, {} as Record<CallPriority, number>);
+
+      return {
+        totalCalls,
+        successfulCalls,
+        failedCalls,
+        successRate: Math.round(successRate * 100) / 100,
+        averageDuration,
         totalDuration,
-        averageDuration: allCalls.length > 0 ? Math.round(totalDuration / allCalls.length) : 0,
-        successRate: Math.round(successRate * 100) / 100
+        callsByStatus,
+        callsByOutcome,
+        callsByPriority
       };
-
-      return stats;
     } catch (error) {
       throw new CustomError('Failed to get call stats', 500);
     }
   }
 
-  async startCall(callId: string, userId: string): Promise<Call> {
+  async processCallEnded(callData: any): Promise<void> {
     try {
-      const call = await this.getCallById(callId);
-      
+      // Find call record
+      const call = await this.findCallByRetellId(callData.call_id);
       if (!call) {
-        throw new CustomError('Call not found', 404);
-      }
-
-      // Update call status to ringing
-      const updatedCall = await this.updateCall(callId, {
-        status: 'ringing',
-        startedAt: new Date().toISOString()
-      });
-
-      return updatedCall;
-    } catch (error) {
-      if (error instanceof CustomError) {
-        throw error;
-      }
-      throw new CustomError('Failed to start call', 500);
-    }
-  }
-
-  async endCall(callId: string, data: { outcome: string; notes?: string }): Promise<Call> {
-    try {
-      const call = await this.getCallById(callId);
-      
-      if (!call) {
-        throw new CustomError('Call not found', 404);
-      }
-
-      // Calculate duration if call was started
-      let duration = call.duration;
-      if (call.startedAt) {
-        const startTime = new Date(call.startedAt);
-        const endTime = new Date();
-        duration = Math.round((endTime.getTime() - startTime.getTime()) / 1000);
-      }
-
-      const updatedCall = await this.updateCall(callId, {
-        status: 'completed',
-        outcome: data.outcome,
-        notes: data.notes,
-        duration,
-        endedAt: new Date().toISOString()
-      });
-
-      return updatedCall;
-    } catch (error) {
-      if (error instanceof CustomError) {
-        throw error;
-      }
-      throw new CustomError('Failed to end call', 500);
-    }
-  }
-
-  async getCallRecording(callId: string) {
-    try {
-      const call = await this.getCallById(callId);
-      
-      if (!call.recordingUrl) {
-        throw new CustomError('No recording available for this call', 404);
-      }
-
-      return { recordingUrl: call.recordingUrl };
-    } catch (error) {
-      if (error instanceof CustomError) {
-        throw error;
-      }
-      throw new CustomError('Failed to get call recording', 500);
-    }
-  }
-
-  async getCallTranscript(callId: string) {
-    try {
-      const call = await this.getCallById(callId);
-      
-      if (!call.transcript) {
-        throw new CustomError('No transcript available for this call', 404);
-      }
-
-      return { transcript: call.transcript };
-    } catch (error) {
-      if (error instanceof CustomError) {
-        throw error;
-      }
-      throw new CustomError('Failed to get call transcript', 500);
-    }
-  }
-
-  async handleRetellWebhook(webhookData: RetellWebhookPayload): Promise<void> {
-    try {
-      const { event, data } = webhookData;
-      
-      // Find call by Retell call ID
-      const calls = await AirtableService.getRecords(this.tableName, {
-        filterByFormula: `{CallId} = '${data.call_id}'`,
-        maxRecords: 1
-      });
-
-      if (calls.length === 0) {
-        console.warn(`Call not found for Retell call ID: ${data.call_id}`);
+        console.warn(`Call not found for Retell ID: ${callData.call_id}`);
         return;
       }
-
-      const call = calls[0];
-
-      // Update call based on event
-      switch (event) {
-        case 'call.answered':
-          await this.updateCall(call.id, {
-            status: 'answered',
-            startedAt: new Date().toISOString()
-          });
-          break;
-        
-        case 'call.ended':
-          await this.updateCall(call.id, {
-            status: 'completed',
-            duration: data.duration,
-            recordingUrl: data.recording_url,
-            transcript: data.transcript,
-            endedAt: new Date().toISOString()
-          });
-          break;
-        
-        case 'call.failed':
-          await this.updateCall(call.id, {
-            status: 'failed',
-            outcome: 'failed',
-            endedAt: new Date().toISOString()
-          });
-          break;
-        
-        default:
-          console.log(`Unhandled Retell event: ${event}`);
-      }
-    } catch (error) {
-      console.error('Error handling Retell webhook:', error);
-      throw new CustomError('Failed to process webhook', 500);
-    }
-  }
-
-  async createRetellCall(leadId: string, phoneNumber: string, agentId: string, userId: string) {
-    try {
-      if (!config.retell.apiKey) {
-        throw new CustomError('Retell API key not configured', 500);
-      }
-
-      // Create call record first
-      const call = await this.createCall({
-        leadId,
-        phoneNumber,
-        scheduledAt: new Date().toISOString()
-      }, userId);
-
-      // Make API call to Retell
-      const response = await axios.post('https://api.retellai.com/create-call', {
-        agent_id: agentId,
-        phone_number: phoneNumber,
-        metadata: {
-          call_id: call.id,
-          lead_id: leadId
-        }
-      }, {
-        headers: {
-          'Authorization': `Bearer ${config.retell.apiKey}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      // Update call with Retell call ID
-      const updatedCall = await this.updateCall(call.id, {
-        callId: response.data.call_id,
-        status: 'initiated'
-      });
-
-      return updatedCall;
-    } catch (error) {
-      if (error instanceof CustomError) {
-        throw error;
-      }
-      throw new CustomError('Failed to create Retell call', 500);
-    }
-  }
-
-  async getScheduledCalls(options: { page: number; limit: number }) {
-    try {
-      const { page, limit } = options;
-      const offset = (page - 1) * limit;
-
-      const records = await AirtableService.getRecords(this.tableName, {
-        filterByFormula: `{Status} = 'scheduled'`,
-        maxRecords: limit,
-        offset: offset
-      });
-
-      return {
-        data: records,
-        pagination: {
-          page,
-          limit,
-          total: records.length,
-          totalPages: Math.ceil(records.length / limit)
-        }
+      
+      // Update call with results
+      const updates: Partial<Call> = {
+        status: CallStatus.COMPLETED,
+        duration: callData.call_length || 0,
+        transcript: callData.transcript || '',
+        endedAt: new Date()
       };
+      
+      // Determine outcome
+      const outcome = this.determineCallOutcome(callData);
+      updates.outcome = outcome;
+      
+      // Update call record
+      await this.updateCall(call.id, updates);
+      
+      // Update lead status if needed
+      if (outcome === CallOutcome.APPOINTMENT_SCHEDULED || outcome === CallOutcome.QUALIFIED_LEAD) {
+        await this.leadService.updateLead(call.leadId, {
+          status: outcome === CallOutcome.APPOINTMENT_SCHEDULED ? 'appointment_scheduled' : 'qualified'
+        });
+      }
     } catch (error) {
-      throw new CustomError('Failed to get scheduled calls', 500);
+      console.error('Error processing call ended:', error);
+      throw error;
     }
   }
 
-  async scheduleCall(callData: CreateCallRequest, userId: string): Promise<Call> {
+  async processCallAnalysis(callData: any): Promise<void> {
+    try {
+      // Find call record
+      const call = await this.findCallByRetellId(callData.call_id);
+      if (!call) {
+        console.warn(`Call not found for Retell ID: ${callData.call_id}`);
+        return;
+      }
+      
+      // Update call with analysis
+      const updates: Partial<Call> = {
+        sentiment: callData.analysis_data?.sentiment || 0,
+        intent: callData.analysis_data?.intent || '',
+        keywords: callData.analysis_data?.keywords || [],
+        notes: callData.analysis_data?.summary || ''
+      };
+      
+      await this.updateCall(call.id, updates);
+    } catch (error) {
+      console.error('Error processing call analysis:', error);
+      throw error;
+    }
+  }
+
+  async processCallFailed(callData: any): Promise<void> {
+    try {
+      // Find call record
+      const call = await this.findCallByRetellId(callData.call_id);
+      if (!call) {
+        console.warn(`Call not found for Retell ID: ${callData.call_id}`);
+        return;
+      }
+      
+      // Update call status
+      await this.updateCall(call.id, {
+        status: CallStatus.FAILED,
+        outcome: CallOutcome.FAILED,
+        endedAt: new Date()
+      });
+    } catch (error) {
+      console.error('Error processing call failed:', error);
+      throw error;
+    }
+  }
+
+  private determineCallOutcome(callData: any): CallOutcome {
+    const transcript = callData.transcript?.toLowerCase() || '';
+    const duration = callData.call_length || 0;
+    
+    // No answer detection
+    if (duration < 30) return CallOutcome.NO_ANSWER;
+    
+    // Voicemail detection
+    if (transcript.includes('voicemail') || transcript.includes('leave a message')) {
+      return CallOutcome.VOICEMAIL;
+    }
+    
+    // Success indicators
+    if (transcript.includes('appointment') || transcript.includes('schedule')) {
+      return CallOutcome.APPOINTMENT_SCHEDULED;
+    }
+    
+    if (transcript.includes('not interested') || transcript.includes('don\'t call')) {
+      return CallOutcome.NOT_INTERESTED;
+    }
+    
+    if (transcript.includes('wrong number') || transcript.includes('not here')) {
+      return CallOutcome.WRONG_NUMBER;
+    }
+    
+    if (transcript.includes('do not call') || transcript.includes('stop calling')) {
+      return CallOutcome.DO_NOT_CALL;
+    }
+    
+    // Default to connected if we have substantial conversation
+    return duration > 60 ? CallOutcome.SUCCESSFUL : CallOutcome.FAILED;
+  }
+
+  private async createCallRecord(callData: Partial<Call>): Promise<Call> {
     try {
       const newCall = await AirtableService.createRecord(this.tableName, {
         ...callData,
-        agentId: userId,
-        status: 'scheduled',
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()
       });
 
       return newCall;
     } catch (error) {
-      throw new CustomError('Failed to schedule call', 500);
+      throw new CustomError('Failed to create call record', 500);
     }
   }
 
-  async updateScheduledCall(callId: string, updateData: UpdateCallRequest): Promise<Call> {
+  private async updateCall(callId: string, updates: Partial<Call>): Promise<void> {
     try {
-      return await this.updateCall(callId, updateData);
-    } catch (error) {
-      if (error instanceof CustomError) {
-        throw error;
-      }
-      throw new CustomError('Failed to update scheduled call', 500);
-    }
-  }
-
-  async cancelScheduledCall(callId: string): Promise<void> {
-    try {
-      await this.updateCall(callId, {
-        status: 'cancelled',
+      await AirtableService.updateRecord(this.tableName, callId, {
+        ...updates,
         updatedAt: new Date().toISOString()
       });
     } catch (error) {
-      if (error instanceof CustomError) {
-        throw error;
-      }
-      throw new CustomError('Failed to cancel scheduled call', 500);
+      throw new CustomError('Failed to update call', 500);
+    }
+  }
+
+  private async findCallByRetellId(retellCallId: string): Promise<Call | null> {
+    try {
+      const calls = await AirtableService.getRecords(this.tableName, {
+        filterByFormula: `{CallId} = '${retellCallId}'`,
+        maxRecords: 1
+      });
+
+      return calls.length > 0 ? calls[0] : null;
+    } catch (error) {
+      console.error('Error finding call by Retell ID:', error);
+      return null;
     }
   }
 } 

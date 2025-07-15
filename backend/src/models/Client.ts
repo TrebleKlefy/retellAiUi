@@ -14,6 +14,15 @@ export interface Client {
   notes?: string;
   status: 'active' | 'inactive' | 'prospect';
   assignedTo?: string; // User ID
+  
+  // Retell AI Configuration
+  retell?: {
+    apiKey: string;
+    agentId: string;
+    fromNumber: string;
+    isActive: boolean;
+  };
+  
   createdAt: Date;
   updatedAt: Date;
 }
