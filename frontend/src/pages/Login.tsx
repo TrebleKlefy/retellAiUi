@@ -11,8 +11,11 @@ const Login: React.FC = () => {
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
+  const [forgotPasswordEmail, setForgotPasswordEmail] = useState('');
+  const [forgotPasswordLoading, setForgotPasswordLoading] = useState(false);
 
-  const { login } = useAuth();
+  const { login, forgotPassword } = useAuth();
   const { addNotification } = useApp();
   const navigate = useNavigate();
   const location = useLocation();
@@ -30,8 +33,6 @@ const Login: React.FC = () => {
 
     if (!formData.password) {
       newErrors.password = 'Password is required';
-    } else if (formData.password.length < 6) {
-      newErrors.password = 'Password must be at least 6 characters';
     }
 
     setErrors(newErrors);
@@ -68,6 +69,43 @@ const Login: React.FC = () => {
     }
   };
 
+  const handleForgotPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!forgotPasswordEmail || !/\S+@\S+\.\S+/.test(forgotPasswordEmail)) {
+      addNotification({
+        type: 'error',
+        title: 'Invalid Email',
+        message: 'Please enter a valid email address',
+        duration: 3000,
+      });
+      return;
+    }
+
+    setForgotPasswordLoading(true);
+
+    try {
+      await forgotPassword(forgotPasswordEmail);
+      addNotification({
+        type: 'success',
+        title: 'Password Reset Sent',
+        message: 'If an account with that email exists, a password reset link has been sent',
+        duration: 5000,
+      });
+      setShowForgotPassword(false);
+      setForgotPasswordEmail('');
+    } catch (error: any) {
+      addNotification({
+        type: 'error',
+        title: 'Password Reset Failed',
+        message: error.message || 'Failed to send password reset email',
+        duration: 5000,
+      });
+    } finally {
+      setForgotPasswordLoading(false);
+    }
+  };
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
@@ -77,6 +115,67 @@ const Login: React.FC = () => {
       setErrors(prev => ({ ...prev, [name]: '' }));
     }
   };
+
+  if (showForgotPassword) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
+        <div className="max-w-md w-full space-y-8">
+          <div>
+            <div className="mx-auto h-12 w-12 bg-primary-600 rounded-lg flex items-center justify-center">
+              <span className="text-white font-bold text-xl">R</span>
+            </div>
+            <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
+              Reset Password
+            </h2>
+            <p className="mt-2 text-center text-sm text-gray-600">
+              Enter your email address and we'll send you a link to reset your password
+            </p>
+          </div>
+
+          <form className="mt-8 space-y-6" onSubmit={handleForgotPassword}>
+            <div>
+              <label htmlFor="email" className="block text-sm font-medium text-gray-700">
+                Email address
+              </label>
+              <input
+                id="email"
+                name="email"
+                type="email"
+                autoComplete="email"
+                required
+                value={forgotPasswordEmail}
+                onChange={(e) => setForgotPasswordEmail(e.target.value)}
+                className="mt-1 input"
+                placeholder="Enter your email"
+              />
+            </div>
+
+            <div className="space-y-4">
+              <Button
+                type="submit"
+                variant="primary"
+                size="lg"
+                loading={forgotPasswordLoading}
+                className="w-full"
+              >
+                Send Reset Link
+              </Button>
+              
+              <Button
+                type="button"
+                variant="secondary"
+                size="lg"
+                onClick={() => setShowForgotPassword(false)}
+                className="w-full"
+              >
+                Back to Login
+              </Button>
+            </div>
+          </form>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
@@ -136,7 +235,7 @@ const Login: React.FC = () => {
             </div>
           </div>
 
-          <div>
+          <div className="space-y-4">
             <Button
               type="submit"
               variant="primary"
@@ -146,6 +245,16 @@ const Login: React.FC = () => {
             >
               Sign in
             </Button>
+
+            <div className="text-center">
+              <button
+                type="button"
+                className="text-sm text-primary-600 hover:text-primary-500"
+                onClick={() => setShowForgotPassword(true)}
+              >
+                Forgot your password?
+              </button>
+            </div>
           </div>
 
           <div className="text-center">

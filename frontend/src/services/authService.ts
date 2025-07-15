@@ -1,5 +1,5 @@
 import { apiService } from './api';
-import { LoginCredentials, RegisterData, User, AuthResponse } from '../types/auth';
+import { LoginCredentials, RegisterData, User, AuthResponse, RefreshTokenRequest, ChangePasswordRequest, ResetPasswordRequest } from '../types/auth';
 
 export const authService = {
   // Login user
@@ -16,6 +16,15 @@ export const authService = {
     const response = await apiService.post<AuthResponse>('/auth/register', data);
     if (!response.success) {
       throw new Error(response.error || 'Registration failed');
+    }
+    return response.data!;
+  },
+
+  // Refresh token
+  refreshToken: async (refreshToken: string): Promise<AuthResponse> => {
+    const response = await apiService.post<AuthResponse>('/auth/refresh-token', { refreshToken });
+    if (!response.success) {
+      throw new Error(response.error || 'Token refresh failed');
     }
     return response.data!;
   },
@@ -51,6 +60,14 @@ export const authService = {
     });
     if (!response.success) {
       throw new Error(response.error || 'Failed to change password');
+    }
+  },
+
+  // Forgot password
+  forgotPassword: async (email: string): Promise<void> => {
+    const response = await apiService.post('/auth/forgot-password', { email });
+    if (!response.success) {
+      throw new Error(response.error || 'Failed to send password reset email');
     }
   },
 
